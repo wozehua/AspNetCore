@@ -2,9 +2,11 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Microsoft.Extensions.CommandLineUtils;
+using Xunit;
 using Xunit.Abstractions;
 
 namespace Templates.Test.Helpers
@@ -101,6 +103,8 @@ namespace Templates.Test.Helpers
             VerifyCannotFindTemplate(output, "angular");
 
             var builtPackages = MondoHelpers.GetNupkgFiles();
+            Assert.NotEmpty(builtPackages);
+
             foreach (var packagePath in builtPackages)
             {
                 if (_templatePackages.Any(name => Path.GetFileName(packagePath).StartsWith(name, StringComparison.OrdinalIgnoreCase)))
