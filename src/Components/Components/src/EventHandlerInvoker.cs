@@ -11,6 +11,8 @@ namespace Microsoft.AspNetCore.Components
     /// </summary>
     public readonly struct EventHandlerInvoker
     {
+        public static readonly EventHandlerInvokerFactory Factory = new EventHandlerInvokerFactory();
+
         /// <summary>
         /// Creates the new <see cref="EventHandlerInvoker"/>.
         /// </summary>
