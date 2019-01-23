@@ -40,11 +40,16 @@ namespace Microsoft.AspNetCore.Components.Test.Helpers
         public new Task RenderRootComponentAsync(int componentId, ParameterCollection parameters)
             => InvokeAsync(() => base.RenderRootComponentAsync(componentId, parameters));
 
-        public new Task DispatchEventAsync(int componentId, int eventHandlerId, UIEventArgs eventArgs)
-            => InvokeAsync(() => base.DispatchEventAsync(componentId, eventHandlerId, eventArgs));
+        public new Task DispatchEventAsync(int eventHandlerId, UIEventArgs args)
+            => InvokeAsync(() => base.DispatchEventAsync(eventHandlerId, args));
 
         public T InstantiateComponent<T>() where T : IComponent
             => (T)InstantiateComponent(typeof(T));
+
+        public Task WaitForAsyncWork()
+        {
+            return ProcessAsynchronousWork();
+        }
 
         protected override Task UpdateDisplayAsync(in RenderBatch renderBatch)
         {

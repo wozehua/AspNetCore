@@ -225,11 +225,11 @@ namespace Microsoft.AspNetCore.Components.Rendering
             }
         }
 
-        private async Task ProcessAsynchronousWork()
+        private protected async Task ProcessAsynchronousWork()
         {
             // Child components SetParametersAsync are stored in the queue of pending tasks,
             // which might trigger further renders.
-            while (_pendingTasks.Count > 0)
+            while (_pendingTasks != null && _pendingTasks.Count > 0)
             {
                 Task pendingWork;
                 // Create a Task that represents the remaining ongoing work for the rendering process
@@ -262,16 +262,15 @@ namespace Microsoft.AspNetCore.Components.Rendering
         protected abstract Task UpdateDisplayAsync(in RenderBatch renderBatch);
 
         /// <summary>
-        /// Notifies the specified component that an event has occurred.
+        /// Notifies the renderer that an event has occurred.
         /// </summary>
-        /// <param name="componentId">The unique identifier for the component within the scope of this <see cref="Renderer"/>.</param>
         /// <param name="eventHandlerId">The <see cref="RenderTreeFrame.AttributeEventHandlerId"/> value from the original event attribute.</param>
         /// <param name="eventArgs">Arguments to be passed to the event handler.</param>
         /// <returns>
         /// A <see cref="Task"/> which will complete once all asynchronous processing related to the event
         /// has completed.
         /// </returns>
-        public Task DispatchEventAsync(int componentId, int eventHandlerId, UIEventArgs eventArgs)
+        public Task DispatchEventAsync(int eventHandlerId, UIEventArgs eventArgs)
         {
             EnsureSynchronizationContext();
 
@@ -279,12 +278,11 @@ namespace Microsoft.AspNetCore.Components.Rendering
             {
                 // The event handler might request multiple renders in sequence. Capture them
                 // all in a single batch.
-                var componentState = GetRequiredComponentState(componentId);
                 Task task = null;
                 try
                 {
                     _isBatchInProgress = true;
-                    task = componentState.DispatchEventAsync(binding, eventArgs);
+                    task = ComponentBase.DispatchStateChangeAsync(binding.Delegate.Target, binding, eventArgs);
                 }
                 catch (Exception ex) when (!task.IsCanceled)
                 {
