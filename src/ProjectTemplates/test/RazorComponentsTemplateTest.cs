@@ -24,7 +24,7 @@ namespace Templates.Test
             ProjectName += ".Server";
             TemplateOutputDir = Path.Combine(TemplateOutputDir, ProjectName);
 
-            await RunPuppeteerTests(template, 8000, 8001);
+            await RunPuppeteerTests(template, 7000, 7001);
         }
     }
 }
