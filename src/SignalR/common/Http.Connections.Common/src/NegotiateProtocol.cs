@@ -93,98 +93,94 @@ namespace Microsoft.AspNetCore.Http.Connections
         {
             try
             {
-                var reader = new Utf8JsonReader(content, isFinalBlock: true, state: default);
-
-                reader.CheckRead();
-                reader.EnsureObjectStart();
-
-                string connectionId = null;
-                string url = null;
-                string accessToken = null;
-                List<AvailableTransport> availableTransports = null;
-                string error = null;
-
-                var completed = false;
-                while (!completed && reader.CheckRead())
+                using (var doc = JsonDocument.Parse(content.ToArray(), readerOptions: default))
                 {
-                    switch (reader.TokenType)
+                    var root = doc.RootElement;
+
+                    string connectionId = null;
+                    string url = null;
+                    string accessToken = null;
+                    List<AvailableTransport> availableTransports = null;
+                    string error = null;
+
+                    JsonElement value;
+                    if (root.TryGetProperty(UrlPropertyNameBytes, out value))
                     {
-                        case JsonTokenType.PropertyName:
-                            var memberName = reader.ValueSpan;
+                        url = value.GetString();
+                    }
+                    if (root.TryGetProperty(AccessTokenPropertyNameBytes, out value))
+                    {
+                        accessToken = value.GetString();
+                    }
+                    if (root.TryGetProperty(ConnectionIdPropertyNameBytes, out value))
+                    {
+                        connectionId = value.GetString();
+                    }
+                    if (root.TryGetProperty(AvailableTransportsPropertyNameBytes, out value))
+                    {
+                        availableTransports = new List<AvailableTransport>();
 
-                            if (memberName.SequenceEqual(UrlPropertyNameBytes))
+                        foreach (var item in value.EnumerateArray())
+                        {
+                            var availableTransport = new AvailableTransport();
+                            if (item.TryGetProperty(TransportPropertyNameBytes, out var arrayItem))
                             {
-                                url = reader.ReadAsString(UrlPropertyNameBytes);
+                                availableTransport.Transport = arrayItem.GetString();
                             }
-                            else if (memberName.SequenceEqual(AccessTokenPropertyNameBytes))
+                            if (item.TryGetProperty(TransferFormatsPropertyNameBytes, out arrayItem))
                             {
-                                accessToken = reader.ReadAsString(AccessTokenPropertyNameBytes);
-                            }
-                            else if (memberName.SequenceEqual(ConnectionIdPropertyNameBytes))
-                            {
-                                connectionId = reader.ReadAsString(ConnectionIdPropertyNameBytes);
-                            }
-                            else if (memberName.SequenceEqual(AvailableTransportsPropertyNameBytes))
-                            {
-                                reader.CheckRead();
-                                reader.EnsureArrayStart();
-
-                                availableTransports = new List<AvailableTransport>();
-                                while (reader.CheckRead())
+                                availableTransport.TransferFormats = new List<string>();
+                                foreach (var format in arrayItem.EnumerateArray())
                                 {
-                                    if (reader.TokenType == JsonTokenType.StartObject)
-                                    {
-                                        availableTransports.Add(ParseAvailableTransport(ref reader));
-                                    }
-                                    else if (reader.TokenType == JsonTokenType.EndArray)
-                                    {
-                                        break;
-                                    }
+                                    availableTransport.TransferFormats.Add(format.GetString());
                                 }
                             }
-                            else if (memberName.SequenceEqual(ErrorPropertyNameBytes))
-                            {
-                                error = reader.ReadAsString(ErrorPropertyNameBytes);
-                            }
-                            else if (memberName.SequenceEqual(ProtocolVersionPropertyNameBytes))
-                            {
-                                throw new InvalidOperationException("Detected a connection attempt to an ASP.NET SignalR Server. This client only supports connecting to an ASP.NET Core SignalR Server. See https://aka.ms/signalr-core-differences for details.");
-                            }
-                            else
-                            {
-                                reader.Skip();
-                            }
-                            break;
-                        case JsonTokenType.EndObject:
-                            completed = true;
-                            break;
-                        default:
-                            throw new InvalidDataException($"Unexpected token '{reader.TokenType}' when reading negotiation response JSON.");
-                    }
-                }
 
-                if (url == null && error == null)
-                {
-                    // if url isn't specified or there isn't an error, connectionId and available transports are required
-                    if (connectionId == null)
+                            if (availableTransport.Transport == null)
+                            {
+                                throw new InvalidDataException($"Missing required property '{TransportPropertyName}'.");
+                            }
+
+                            if (availableTransport.TransferFormats == null)
+                            {
+                                throw new InvalidDataException($"Missing required property '{TransferFormatsPropertyName}'.");
+                            }
+
+                            availableTransports.Add(availableTransport);
+                        }
+                    }
+                    if (root.TryGetProperty(ErrorPropertyNameBytes, out value))
                     {
-                        throw new InvalidDataException($"Missing required property '{ConnectionIdPropertyName}'.");
+                        error = value.GetString();
                     }
-
-                    if (availableTransports == null)
+                    if (root.TryGetProperty(ProtocolVersionPropertyNameBytes, out _))
                     {
-                        throw new InvalidDataException($"Missing required property '{AvailableTransportsPropertyName}'.");
+                        throw new InvalidOperationException("Detected a connection attempt to an ASP.NET SignalR Server. This client only supports connecting to an ASP.NET Core SignalR Server. See https://aka.ms/signalr-core-differences for details.");
                     }
-                }
 
-                return new NegotiationResponse
-                {
-                    ConnectionId = connectionId,
-                    Url = url,
-                    AccessToken = accessToken,
-                    AvailableTransports = availableTransports,
-                    Error = error,
-                };
+                    if (url == null && error == null)
+                    {
+                        // if url isn't specified or there isn't an error, connectionId and available transports are required
+                        if (connectionId == null)
+                        {
+                            throw new InvalidDataException($"Missing required property '{ConnectionIdPropertyName}'.");
+                        }
+
+                        if (availableTransports == null)
+                        {
+                            throw new InvalidDataException($"Missing required property '{AvailableTransportsPropertyName}'.");
+                        }
+                    }
+
+                    return new NegotiationResponse
+                    {
+                        ConnectionId = connectionId,
+                        Url = url,
+                        AccessToken = accessToken,
+                        AvailableTransports = availableTransports,
+                        Error = error,
+                    };
+                }
             }
             catch (Exception ex)
             {
