@@ -20,6 +20,14 @@ namespace Templates.Test
             var template = "razorcomponents";
             RunDotNetNew(template);
 
+            File.WriteAllText(
+                Path.Combine(TemplateOutputDir, "Directory.Build.targets"),
+                @"<Project> <ItemGroup>
+                <PackageReference Include=""Microsoft.NET.SDK.Razor"" />
+</ItemGroup> </Project>
+"
+            );
+
             // Run the "server" project
             ProjectName += ".Server";
             TemplateOutputDir = Path.Combine(TemplateOutputDir, ProjectName);
