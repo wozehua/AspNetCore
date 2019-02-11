@@ -26,7 +26,8 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
                                         IHttpBodyControlFeature,
                                         IHttpMaxRequestBodySizeFeature,
                                         IHttpResponseStartFeature,
-                                        IResponseBodyPipeFeature
+                                        IResponseBodyPipeFeature,
+                                        IRequestBodyPipeFeature
     {
         // NOTE: When feature interfaces are added to or removed from this HttpProtocol class implementation,
         // then the list of `implementedFeatures` in the generated code project MUST also be updated.
@@ -94,8 +95,39 @@ namespace Microsoft.AspNetCore.Server.Kestrel.Core.Internal.Http
 
         Stream IHttpRequestFeature.Body
         {
-            get => RequestBody;
-            set => RequestBody = value;
+            get
+            {
+                return RequestBody;
+            }
+            set
+            {
+                RequestBody = value;
+                var requestPipeReader = new StreamPipeReader(RequestBody, new StreamPipeReaderOptions(
+                    minimumSegmentSize: KestrelMemoryPool.MinimumSegmentSize,
+                    minimumReadThreshold: KestrelMemoryPool.MinimumSegmentSize / 4,
+                    _context.MemoryPool));
+                RequestPipeReader = requestPipeReader;
+
+                // The StreamPipeWrapper needs to be disposed as it hold onto blocks of memory
+                if (_wrapperObjectsToDispose == null)
+                {
+                    _wrapperObjectsToDispose = new List<IDisposable>();
+                }
+                _wrapperObjectsToDispose.Add(requestPipeReader);
+            }
+        }
+
+        PipeReader IRequestBodyPipeFeature.RequestBodyPipe
+        {
+            get
+            {
+                return RequestPipeReader;
+            }
+            set
+            {
+                RequestPipeReader = value;
+                RequestBody = new ReadOnlyPipeStream(RequestPipeReader);
+            }
         }
 
         int IHttpResponseFeature.StatusCode
