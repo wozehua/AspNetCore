@@ -131,7 +131,8 @@ namespace Microsoft.AspNetCore.Routing
                     matchResults = new List<OutboundMatchResult>();
                     namedOutboundMatchResults.Add(entry.RouteName, matchResults);
                 }
-                matchResults.Add(new OutboundMatchResult(outboundMatch, isFallbackMatch: false));
+
+                matchResults.Add(new OutboundMatchResult(outboundMatch, quality: 0m));
             }
 
             return new StateEntry(

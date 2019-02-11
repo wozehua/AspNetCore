@@ -21,12 +21,29 @@ namespace Microsoft.AspNetCore.Routing.Internal
         private static readonly RouteValueDictionary EmptyAmbientValues = new RouteValueDictionary();
 
         private readonly DecisionTreeNode<OutboundMatch> _root;
+        private readonly Dictionary<string, HashSet<object>> _knownValues;
 
         public LinkGenerationDecisionTree(IReadOnlyList<OutboundMatch> entries)
         {
             _root = DecisionTreeBuilder<OutboundMatch>.GenerateTree(
                 entries,
                 new OutboundMatchClassifier());
+
+            _knownValues = new Dictionary<string, HashSet<object>>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                foreach (var kvp in entry.Entry.RequiredLinkValues)
+                {
+                    if (!_knownValues.TryGetValue(kvp.Key, out var values))
+                    {
+                        values = new HashSet<object>(RouteValueEqualityComparer.Default);
+                        _knownValues.Add(kvp.Key, values);
+                    }
+
+                    values.Add(kvp.Value ?? string.Empty);
+                }
+            }
         }
 
         public IList<OutboundMatchResult> GetMatches(RouteValueDictionary values, RouteValueDictionary ambientValues)
@@ -35,7 +52,7 @@ namespace Microsoft.AspNetCore.Routing.Internal
             if (_root.Matches.Count > 0 || _root.Criteria.Count > 0)
             {
                 var results = new List<OutboundMatchResult>();
-                Walk(results, values, ambientValues ?? EmptyAmbientValues, _root, isFallbackPath: false);
+                Walk(results, values, ambientValues ?? EmptyAmbientValues, _root, quality: 0m);
                 results.Sort(OutboundMatchResultComparer.Instance);
                 return results;
             }
@@ -73,13 +90,13 @@ namespace Microsoft.AspNetCore.Routing.Internal
             RouteValueDictionary values,
             RouteValueDictionary ambientValues,
             DecisionTreeNode<OutboundMatch> node,
-            bool isFallbackPath)
+            decimal quality)
         {
             // Any entries in node.Matches have had all their required values satisfied, so add them
             // to the results.
             for (var i = 0; i < node.Matches.Count; i++)
             {
-                results.Add(new OutboundMatchResult(node.Matches[i], isFallbackPath));
+                results.Add(new OutboundMatchResult(node.Matches[i], quality));
             }
 
             for (var i = 0; i < node.Criteria.Count; i++)
@@ -91,7 +108,20 @@ namespace Microsoft.AspNetCore.Routing.Internal
                 {
                     if (criterion.Branches.TryGetValue(value ?? string.Empty, out var branch))
                     {
-                        Walk(results, values, ambientValues, branch, isFallbackPath);
+                        Walk(results, values, ambientValues, branch, quality + 1m);
+                    }
+                    else
+                    {
+                        // If an explicitly specified value doesn't match any branch, then speculatively walk the
+                        // "null" path if the value doesn't match any known value.
+                        //
+                        // This can happen when linking from a page <-> action. We want to be
+                        // able to use "page" and "action" as normal route parameters.
+                        var knownValues = _knownValues[key];
+                        if (!knownValues.Contains(value ?? string.Empty) && criterion.Branches.TryGetValue(string.Empty, out branch))
+                        {
+                            Walk(results, values, ambientValues, branch, quality + 0.01m);
+                        }
                     }
                 }
                 else
@@ -105,13 +135,13 @@ namespace Microsoft.AspNetCore.Routing.Internal
                     {
                         if (criterion.Branches.TryGetValue(value, out branch))
                         {
-                            Walk(results, values, ambientValues, branch, isFallbackPath);
+                            Walk(results, values, ambientValues, branch, quality + 0.1m);
                         }
                     }
 
                     if (criterion.Branches.TryGetValue(string.Empty, out branch))
                     {
-                        Walk(results, values, ambientValues, branch, isFallbackPath: true);
+                        Walk(results, values, ambientValues, branch, quality + 0.01m);
                     }
                 }
             }
@@ -139,6 +169,12 @@ namespace Microsoft.AspNetCore.Routing.Internal
 
             public int Compare(OutboundMatchResult x, OutboundMatchResult y)
             {
+                if (x.Quality != y.Quality)
+                {
+                    // Reversed because higher is better
+                    return y.Quality.CompareTo(x.Quality);
+                }
+
                 // For this comparison lower is better.
                 if (x.Match.Entry.Order != y.Match.Entry.Order)
                 {
@@ -149,12 +185,6 @@ namespace Microsoft.AspNetCore.Routing.Internal
                 {
                     // Reversed because higher is better
                     return y.Match.Entry.Precedence.CompareTo(x.Match.Entry.Precedence);
-                }
-
-                if (x.IsFallbackMatch != y.IsFallbackMatch)
-                {
-                    // A fallback match is worse than a non-fallback
-                    return x.IsFallbackMatch.CompareTo(y.IsFallbackMatch);
                 }
 
                 return string.Compare(

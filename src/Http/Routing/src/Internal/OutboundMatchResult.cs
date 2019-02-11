@@ -7,14 +7,14 @@ namespace Microsoft.AspNetCore.Routing.Internal
 {
     public readonly struct OutboundMatchResult
     {
-        public OutboundMatchResult(OutboundMatch match, bool isFallbackMatch)
+        public OutboundMatchResult(OutboundMatch match, decimal quality)
         {
             Match = match;
-            IsFallbackMatch = isFallbackMatch;
+            Quality = quality;
         }
 
         public OutboundMatch Match { get; }
 
-        public bool IsFallbackMatch { get; }
+        public decimal Quality { get; }
     }
 }
