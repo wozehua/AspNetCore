@@ -379,6 +379,10 @@
       <Uri>https://github.com/aspnet/Extensions</Uri>
       <Sha>f3e1ef8da55fc9336fc2a050afd614530bd0264e</Sha>
     </Dependency>
+    <Dependency Name="Microsoft.DotNet.GenApi" Version="1.0.0-beta.19081.1">
+      <Uri>https://github.com/dotnet/arcade</Uri>
+      <Sha>000000</Sha>
+    </Dependency>
     <Dependency Name="Microsoft.AspNetCore.Testing" Version="3.0.0-preview.19105.4">
       <Uri>https://github.com/aspnet/Extensions</Uri>
       <Sha>f3e1ef8da55fc9336fc2a050afd614530bd0264e</Sha>

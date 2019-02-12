@@ -87,6 +87,12 @@
 
     <!-- Enables Strict mode for Roslyn compiler -->
     <Features>strict</Features>
+
+    <IsReferenceAssemblyProject>false</IsReferenceAssemblyProject>
+    <IsReferenceAssemblyProject Condition="$(MSBuildProjectDirectory.EndsWith('ref'))">true</IsReferenceAssemblyProject>
+    <HasReferenceAssembly>false</HasReferenceAssembly>
+    <HasReferenceAssembly Condition="'$(MSBuildProjectExtension)' == '.csproj' AND '$(IsReferenceAssemblyProject)' != 'true'">true</HasReferenceAssembly>
+    <OutDirName Condition="'$(IsReferenceAssemblyProject)' == 'true'">$(MSBuildProjectName)-ref</OutDirName>
   </PropertyGroup>
 
   <Import Project="eng\Versions.props" />
@@ -113,7 +119,8 @@
   </ItemGroup>
 
   <PropertyGroup Condition=" '$(OutputInRepoRoot)' == 'true' ">
-    <BaseOutputPath>$(RepositoryRoot)bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <OutDirName Condition="'$(OutDirName)' == ''">$(MSBuildProjectName)</OutDirName>
+    <BaseOutputPath>$(RepositoryRoot)bin\$(OutDirName)\</BaseOutputPath>
     <OutputPath Condition=" '$(PlatformName)' == 'AnyCPU' ">$(BaseOutputPath)$(Configuration)\</OutputPath>
     <OutputPath Condition=" '$(PlatformName)' != 'AnyCPU' ">$(BaseOutputPath)$(PlatformName)\$(Configuration)\</OutputPath>
 

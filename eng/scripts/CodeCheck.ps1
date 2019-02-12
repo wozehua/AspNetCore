@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version 1
 Import-Module -Scope Local -Force "$PSScriptRoot/common.psm1"
 
-$repoRoot = Resolve-Path "$PSScriptRoot/../.."
+$repoRoot = Resolve-Path "$PSScriptRoot/../../"
 
 [string[]] $errors = @()
 
@@ -26,7 +26,7 @@ try {
     #
 
     if ($ci) {
-        & $repoRoot/build.ps1 -ci /t:InstallDotNet
+        & $PSScriptRoot\..\common\build.ps1 -ci -prepareMachine -build:$false -restore:$false
     }
 
     Write-Host "Checking that Versions.props and Version.Details.xml match"
@@ -54,22 +54,18 @@ try {
     Write-Host "Checking that solutions are up to date"
 
     Get-ChildItem "$repoRoot/*.sln" -Recurse `
-        | ? {
-            # This .sln file is used by the templating engine.
-            $_.Name -ne "RazorComponentsWeb-CSharp.sln"
-        } `
         | % {
-        Write-Host "  Checking $(Split-Path -Leaf $_)"
-        $slnDir = Split-Path -Parent $_
-        $sln = $_
-        & dotnet sln $_ list `
-            | ? { $_ -ne 'Project(s)' -and $_ -ne '----------' } `
-            | % {
-                $proj = Join-Path $slnDir $_
-                if (-not (Test-Path $proj)) {
-                    LogError "Missing project. Solution references a project which does not exist: $proj. [$sln] "
-                }
-            }
+            Write-Host "  Checking $(Split-Path -Leaf $_)"
+            $slnDir = Split-Path -Parent $_
+            $sln = $_
+            & dotnet sln $_ list `
+                | ? { $_ -ne 'Project(s)' -and $_ -ne '----------' } `
+                | % {
+                        $proj = Join-Path $slnDir $_
+                        if (-not (Test-Path $proj)) {
+                            LogError "Missing project. Solution references a project which does not exist: $proj. [$sln] "
+                        }
+                    }
         }
 
     #
@@ -80,13 +76,18 @@ try {
 
     Write-Host "Re-generating project lists"
     Invoke-Block {
-        & $PSScriptRoot\GenerateProjectList.ps1 -ci:$ci
+        & $PSScriptRoot\GenerateProjectList.ps1
+    }
+
+    Write-Host "Re-generating references assemblies"
+    Invoke-Block {
+        & $PSScriptRoot\GenerateReferenceAssemblies.ps1
     }
 
     Write-Host "Re-generating package baselines"
     $dotnet = 'dotnet'
     if ($ci) {
-        $dotnet = "$repoRoot/.dotnet/x64/dotnet.exe"
+        $dotnet = "$repoRoot/.dotnet/dotnet.exe"
     }
     Invoke-Block {
         & $dotnet run -p "$repoRoot/eng/tools/BaselineGenerator/"
