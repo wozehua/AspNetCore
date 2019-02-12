@@ -267,7 +267,11 @@ namespace Microsoft.AspNetCore.Components.Rendering
         /// <param name="componentId">The unique identifier for the component within the scope of this <see cref="Renderer"/>.</param>
         /// <param name="eventHandlerId">The <see cref="RenderTreeFrame.AttributeEventHandlerId"/> value from the original event attribute.</param>
         /// <param name="eventArgs">Arguments to be passed to the event handler.</param>
-        public void DispatchEvent(int componentId, int eventHandlerId, UIEventArgs eventArgs)
+        /// <returns>
+        /// A <see cref="Task"/> which will complete once all asynchronous processing related to the event
+        /// has completed.
+        /// </returns>
+        public Task DispatchEventAsync(int componentId, int eventHandlerId, UIEventArgs eventArgs)
         {
             EnsureSynchronizationContext();
 
@@ -275,16 +279,24 @@ namespace Microsoft.AspNetCore.Components.Rendering
             {
                 // The event handler might request multiple renders in sequence. Capture them
                 // all in a single batch.
+                var componentState = GetRequiredComponentState(componentId);
+                Task task = null;
                 try
                 {
                     _isBatchInProgress = true;
-                    GetRequiredComponentState(componentId).DispatchEvent(binding, eventArgs);
+                    task = componentState.DispatchEventAsync(binding, eventArgs);
+                }
+                catch (Exception ex) when (!task.IsCanceled)
+                {
+                    HandleException(ex);
                 }
                 finally
                 {
                     _isBatchInProgress = false;
                     ProcessRenderQueue();
                 }
+
+                return GetErrorHandledTask(task);
             }
             else
             {
@@ -329,8 +341,7 @@ namespace Microsoft.AspNetCore.Components.Rendering
             // This is for example when we run on a system with a single thread, like WebAssembly.
             if (_dispatcher == null)
             {
-                workItem();
-                return Task.CompletedTask;
+                return workItem();
             }
 
             if (SynchronizationContext.Current == _dispatcher)
@@ -533,6 +544,22 @@ namespace Microsoft.AspNetCore.Components.Rendering
                 var eventHandlerIdsClone = eventHandlerIds.Clone();
                 afterTask.ContinueWith(_ =>
                     RemoveEventHandlerIds(eventHandlerIdsClone, Task.CompletedTask));
+            }
+        }
+
+        private async Task GetErrorHandledTask(Task taskToHandle)
+        {
+            try
+            {
+                await taskToHandle;
+            }
+            catch (Exception ex)
+            {
+                if (!taskToHandle.IsCanceled)
+                {
+                    // Ignore errors due to task cancellations.
+                    HandleException(ex);
+                }
             }
         }
 
